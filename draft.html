@@ -1,0 +1,562 @@
+
+<html>
+   <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"></script>
+      <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
+      <link href='https://fonts.googleapis.com/css?family=Inconsolata' rel='stylesheet' type='text/css'>
+      <style>
+         body {
+            font-family: 'Roboto', sans-serif;
+            background: #19191F;
+            color: #ccc;
+            margin: 0;
+         }
+         h1 {
+            padding: 10px;
+            margin: 0;
+            background: #2e3d49;
+            box-shadow: 0 14px 28px rgba(0,0,0,0.25);
+         }
+         textarea {
+            resize: vertical;
+            width: 100%;
+            padding: 10px;
+         }
+         input[type='text'] {
+            padding: 10px;
+         }
+         input[type='text'], textarea {
+            border: none;
+            color: #ddd;
+            font-family: 'Inconsolata';
+            outline: none;
+            font-size: large;
+            background-color: inherit;
+         }
+
+         input[type='text']:focus, textarea:focus {
+            color: #f6f6f6;
+         }
+
+         input[type='button'] {
+            font: inherit;
+            color: inherit;
+            background: inherit;
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            margin-top: 16px;
+            background-color: #be1722;
+            font-weight: bolder;
+            color: #ddd;
+            float: right;
+         }
+
+         label {
+            display: block;
+            background-color: #121216;
+            padding: 10px;
+         }
+
+         .focus {
+            color: #558;
+         }
+
+         .content {
+            max-width: 960px;
+            margin: 0 auto;
+         }
+         .content > div {
+            box-shadow: 0 14px 28px rgba(0,0,0,0.25);
+         }
+
+         h2 {
+            margin: 10px 0 0 0;
+         }
+
+         .input_group {
+            margin-top: 10px;
+            background-color: #26262D;
+         }
+
+         .no_entities {
+            padding: 10px 5px;
+         }
+
+         .autoInput--entity {
+               display: inline-block;
+             background-color: #3b3b42;
+             color: white;
+             margin-left: 5px;
+             font-weight: 300;
+             font-size: large;
+             font-family: 'Inconsolata';
+             margin: 10px 4px 0 6px;
+         }
+
+         .autoInput--input-group input {
+            display: inline-block;
+            vertical-align: middle;
+            padding: 10px;
+            margin: 10px 0;
+         }
+         .autoInput--dropdown {
+            position: absolute;
+            background: red;
+            margin: -11px 0 0 5px;
+            max-height: 200px;
+            overflow-y: scroll;
+         }
+         .autoInput--dropdown div:hover {
+            background: #27272F;
+         }
+
+         .autoInput--dropdown div + div {
+            border-top: 1px solid #27272F;
+         }
+
+         .autoInput--dropdown div {
+            padding: 5px 10px;
+            font-weight: bold;
+            background: #19191F;
+            cursor: pointer;
+         }
+         .autoInput--input-group {
+            display: inline-block;
+         }
+         .autoInput--entity .close {
+            vertical-align: middle;
+            display: inline-block;
+            padding: 10px;
+            font-size: small;
+            cursor: pointer;
+         }
+         .autoInput--entity .text {
+            vertical-align: middle;
+            padding-right: 10px;
+         }
+         .autoInput--dropdown .hidden {
+            display: none;
+         }
+         .autoInput--dropdown .selected {
+            display: none;
+         }
+         .almost-delete {
+            background: #6b3b42;
+         }
+      </style>
+      <script>
+
+         (function($) {
+            $.fn.autoInput = function(options) {
+
+               // 'this' is a JQuery object. Stored in a variable to access within functions.
+               var $INPUT = this;
+
+               // stores the placeholder in order to remove and re-add later.
+               var PLACEHOLDER = this.attr("placeholder");
+
+               // The iterating id of values added by regex or special character
+               var INDEX = 0;
+
+               // The amount of added entities
+               var COUNT = 0;
+
+               // Items that are added through regex
+               var TEXT_ITEMS = new Array();
+
+               // Array that simply show if dropdown item is selected
+               var DROPDOWN_ITEMS = new Array();
+
+               // Wraps the input in input-group (for the input and the dropdown), and wrapping the group
+               // in another div with all the added entities.
+               $INPUT.wrap("<div class='autoInput'><div class='autoInput--input-group'></div></div>");
+
+               // The JQuery control
+               var $AUTO_INPUT = this.parent().parent();
+
+               // Will be null if no data option is passed
+               var $DROPDOWN = null;
+               // Creates a dropdown list from passed in data values
+               if(options.data) {
+                  var dropdown = "";
+                  options.data.items.forEach(item => {
+                     dropdown += "<div class='hidden' data-id='" + item[options.data.value] + "'>"
+                        + item[options.data.display] + "</div>";
+                  });
+                  $INPUT.after("<div class='autoInput--dropdown'>" + dropdown + "</div>");
+                  $DROPDOWN = $INPUT.next();
+               }
+
+               // Focus on the input when clicked anywhere in the control
+               function focus() {
+                  $INPUT.focus();
+               }
+               $AUTO_INPUT.on('click', focus);
+
+               function blur() {
+                  $DROPDOWN.find("div").addClass("hidden");
+               }
+               $INPUT.on('focusout', function() { setTimeout(blur,100) });
+
+               // Adding a new entity
+               // * If id is null, then it is added by regex or special character
+               function newEntity(id, text) {
+                  var entity;
+                  if(id == null) {
+                     entity = $(
+                        "<div class='autoInput--entity'>" +
+                           "<span data-text='" + INDEX + "' class='close'>x</span>" +
+                        "<span class='text'>" + text + "</div>"
+                     );
+                     TEXT_ITEMS.push({ value:INDEX++, display: text});
+                  }
+                  else {
+                     entity = $(
+                        "<div class='autoInput--entity'>" +
+                           "<span data-dropdown='" + id + "' class='close'>x</span>" +
+                        "<span class='text'>" + text + "</div>"
+                     );
+                     DROPDOWN_ITEMS[id] = true;
+                  }
+
+                  $INPUT.parent().before(entity);
+                  if(COUNT == 0) $INPUT.removeAttr("placeholder");
+                  COUNT++;
+               }
+
+               // Deletes an entity
+               function onDeleteClick() {
+                  if(this.dataset.dropdown) {
+                     DROPDOWN_ITEMS[this.dataset.dropdown] = undefined;
+                     $(".autoInput--dropdown div[data-id='" + this.dataset.dropdown + "']").removeClass("selected");
+                  }
+                  else if(this.dataset.text) {
+                     TEXT_ITEMS = TEXT_ITEMS.forEach(item => {
+                        if(item.value != this.dataset.text) {
+                           return item;
+                        }
+                     });
+                  }
+
+                  $(this).parent().remove();
+                  if(--COUNT == 0) $INPUT.attr("placeholder", PLACEHOLDER);
+               }
+               $AUTO_INPUT.on('click', '.close', onDeleteClick);
+
+               // Clicking on any of the dropdown items (only done if a data option were passed)
+               function onDropdownClick() {
+                  console.log($(document.activeElement));
+                  newEntity(this.dataset.id, this.innerHTML);
+                  $INPUT.val("");
+                  $DROPDOWN.find("div").addClass("hidden");
+                  $(this).addClass("selected");
+               }
+               if($DROPDOWN) $DROPDOWN.find("div").on('click', onDropdownClick);
+
+               // Hides dropdown items if not in the text parameter
+               function filter(text) {
+                  var valids = 0;
+                  var lastValidIndex = -1;
+                  var i = 0;
+                  $DROPDOWN.children().each(function() {
+                     var $item = $(this);
+                     if(this.innerHTML.toLowerCase().indexOf(text.toLowerCase()) > -1){
+                         $item.removeClass("hidden");
+                         valids += 1;
+                         lastValidIndex = i;
+                     }
+                     else $item.addClass("hidden");
+                     i++;
+                  });
+                  return valids == 1 ? lastValidIndex : -1;
+               }
+
+               function onKeyUp(event) {
+                  var value = $INPUT.val();
+                  // first check if the value matches the regex
+                  if(options.pattern && options.pattern.test(value)) {
+                     newEntity(null, value);
+                     $INPUT.val("");
+                     $DROPDOWN.addClass("hidden");
+                  }
+                  else if(options.data){
+                     var validIndex = filter(value);
+
+                     if((!options.allowedPattern || !options.allowedPattern.test(value)) && validIndex > -1) {
+                        var object = options.data.items[validIndex];
+                        newEntity(object[options.data.value], object[options.data.display]);
+                        $(".autoInput--dropdown div[data-id='" + object[options.data.value] + "']").addClass("selected");
+                        $INPUT.val("");
+                     }
+                     else {
+                        $DROPDOWN.removeClass("hidden");
+                     }
+                  }
+               }
+               this.on('keyup', onKeyUp);
+            };
+         })(jQuery);
+
+         $(function() {
+
+            $("#hallo").autoInput({
+               pattern : /27\d{9}/,
+               allowedPattern : /27\d{1,8}/,
+               data: {
+                  items: [
+                  	{
+                  		"id": 1,
+                  		"name": "Naomi Watkins"
+                  	},
+                  	{
+                  		"id": 2,
+                  		"name": "Hedley Hays"
+                  	},
+                  	{
+                  		"id": 3,
+                  		"name": "Colby Bonner"
+                  	},
+                  	{
+                  		"id": 4,
+                  		"name": "Brittany Campbell"
+                  	},
+                  	{
+                  		"id": 5,
+                  		"name": "Echo Prince"
+                  	},
+                  	{
+                  		"id": 6,
+                  		"name": "Fletcher Santana"
+                  	},
+                  	{
+                  		"id": 7,
+                  		"name": "Lisandra Strickland"
+                  	},
+                  	{
+                  		"id": 8,
+                  		"name": "Clementine Richmond"
+                  	},
+                  	{
+                  		"id": 9,
+                  		"name": "Shelly Wilson"
+                  	},
+                  	{
+                  		"id": 10,
+                  		"name": "Leonard Kline"
+                  	},
+                  	{
+                  		"id": 11,
+                  		"name": "Quentin Pate"
+                  	},
+                  	{
+                  		"id": 12,
+                  		"name": "Bree Ross"
+                  	},
+                  	{
+                  		"id": 13,
+                  		"name": "Charissa Spears"
+                  	},
+                  	{
+                  		"id": 14,
+                  		"name": "Zachary Yates"
+                  	},
+                  	{
+                  		"id": 15,
+                  		"name": "Darius Ortega"
+                  	},
+                  	{
+                  		"id": 16,
+                  		"name": "Colt Ashley"
+                  	},
+                  	{
+                  		"id": 17,
+                  		"name": "Montana Wall"
+                  	},
+                  	{
+                  		"id": 18,
+                  		"name": "Camden Reilly"
+                  	},
+                  	{
+                  		"id": 19,
+                  		"name": "Constance Salas"
+                  	},
+                  	{
+                  		"id": 20,
+                  		"name": "Ima Black"
+                  	},
+                  	{
+                  		"id": 21,
+                  		"name": "Hoyt Bird"
+                  	},
+                  	{
+                  		"id": 22,
+                  		"name": "Bruce Sykes"
+                  	},
+                  	{
+                  		"id": 23,
+                  		"name": "Brittany Osborn"
+                  	},
+                  	{
+                  		"id": 24,
+                  		"name": "Darius Burns"
+                  	},
+                  	{
+                  		"id": 25,
+                  		"name": "Moana David"
+                  	},
+                  	{
+                  		"id": 26,
+                  		"name": "Ishmael Hale"
+                  	},
+                  	{
+                  		"id": 27,
+                  		"name": "Dorothy Carter"
+                  	},
+                  	{
+                  		"id": 28,
+                  		"name": "Len Wilcox"
+                  	},
+                  	{
+                  		"id": 29,
+                  		"name": "Bree Lynch"
+                  	},
+                  	{
+                  		"id": 30,
+                  		"name": "Adrian Bauer"
+                  	},
+                  	{
+                  		"id": 31,
+                  		"name": "Fay Buckner"
+                  	},
+                  	{
+                  		"id": 32,
+                  		"name": "Denise Rios"
+                  	},
+                  	{
+                  		"id": 33,
+                  		"name": "Marny Raymond"
+                  	},
+                  	{
+                  		"id": 34,
+                  		"name": "Mark Workman"
+                  	},
+                  	{
+                  		"id": 35,
+                  		"name": "Ayanna Travis"
+                  	},
+                  	{
+                  		"id": 36,
+                  		"name": "Aubrey Bradford"
+                  	},
+                  	{
+                  		"id": 37,
+                  		"name": "Victoria Norris"
+                  	},
+                  	{
+                  		"id": 38,
+                  		"name": "Macon Good"
+                  	},
+                  	{
+                  		"id": 39,
+                  		"name": "Gary Wallace"
+                  	},
+                  	{
+                  		"id": 40,
+                  		"name": "Stephanie Hebert"
+                  	},
+                  	{
+                  		"id": 41,
+                  		"name": "Cedric Duncan"
+                  	},
+                  	{
+                  		"id": 42,
+                  		"name": "Haviva Roman"
+                  	},
+                  	{
+                  		"id": 43,
+                  		"name": "Norman Landry"
+                  	},
+                  	{
+                  		"id": 44,
+                  		"name": "Wade Palmer"
+                  	},
+                  	{
+                  		"id": 45,
+                  		"name": "Alexis England"
+                  	},
+                  	{
+                  		"id": 46,
+                  		"name": "Gabriel Mcknight"
+                  	},
+                  	{
+                  		"id": 47,
+                  		"name": "Marcia Lynn"
+                  	},
+                  	{
+                  		"id": 48,
+                  		"name": "Anthony Fleming"
+                  	},
+                  	{
+                  		"id": 49,
+                  		"name": "Julie Rowland"
+                  	},
+                  	{
+                  		"id": 50,
+                  		"name": "Gavin Morton"
+                  	}
+                  ],
+                  value: "id",
+                  display: "name"
+               }
+            });
+
+            // var $autocomplete = $("#autocomplete");
+            // var _auto_entities = $(".auto_entities");
+            // function onKeyPress(event) {
+            //    console.log(event);
+            //    if ( event.which == 44 ) {
+            //       event.preventDefault();
+            //       var $input = $(this);
+            //       text = $input.val();
+            //       _auto_entities.append($("<div class='auto_entity'>" + text + "</div>"));
+            //       $input.val("");
+            //    }
+            // }
+            // $autocomplete.on('keypress', onKeyPress);
+         });
+
+      </script>
+   </head>
+   <body>
+
+      <div class='content'>
+         <h2>SMS</h2>
+         <div class='input_group awesome_input'>
+            <input type="text" id="hallo" placeholder="To..."/>
+         </div>
+         <!-- <div class="input_group">
+            <div class='auto_entities'></div>
+            <input type='text' placeholder="To" class="awesomeInput"/>
+         </div> -->
+         <div class="input_group">
+         <textarea class="input" rows="4" cols="50" placeholder="Message"></textarea>
+         </div>
+         <input type='button' value="SEND MESSAGE NOW"/>
+   </div>
+      <!-- <div class="card">
+         <div>
+            <label>TO</label>
+            <input type="text" class="input"/>
+         </div>
+         <div>
+            <label>MESSAGE</label>
+            <textarea class="input" rows="4" cols="50"></textarea>
+         </div>
+      </div>
+      <div>
+         <input type="button" value="Send"/>
+      </div> -->
+   </body>
+</html>
